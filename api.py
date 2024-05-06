@@ -1,5 +1,5 @@
 # api.py by Ribo
-# version 2024.03.23.1
+# version 2024.05.06.1
 
 import hashlib
 import json
@@ -12,6 +12,7 @@ from pydantic import BaseModel, UUID4
 
 HOST = "127.0.0.1"
 PORT = 8080
+ACCEPTABLE_VERSIONS = ["1.2"]
 
 
 class ConversationItem(BaseModel):
@@ -43,8 +44,8 @@ with open("session_token.txt", encoding="utf-8") as fp:
 def auth(credentials=Depends(security)):
     try:
         assert credentials.scheme == "Bearer"
-        username, pwmd5 = credentials.credentials.split(":")
-        assert pwmd5 == users[username]
+        username, pwmd5, ver = credentials.credentials.split(":")
+        assert ver in ACCEPTABLE_VERSIONS and pwmd5 == users[username]
 
     except:
         raise HTTPException(status_code=401)
