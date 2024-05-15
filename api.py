@@ -1,5 +1,5 @@
 # api.py by Ribo
-# version 2024.03.23.1
+# version 2024.05.15.1
 
 import hashlib
 import json
@@ -10,8 +10,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security.http import HTTPBearer
 from pydantic import BaseModel, UUID4
 
-HOST = "127.0.0.1"
 PORT = 8080
+ACCEPTABLE_VERSIONS = ["1.3.1", "1.3.2"]
 
 
 class ConversationItem(BaseModel):
@@ -29,31 +29,36 @@ app.add_middleware(
 
 security = HTTPBearer()
 
-# init
-with open("users.json", encoding="utf-8") as fp:
-    users = json.load(fp)
-
-users = {user["username"]: hashlib.md5(
-    user["password"].encode()).hexdigest() for user in users}
-
-with open("session_token.txt", encoding="utf-8") as fp:
-    session_token = fp.read().strip()
-
 
 def auth(credentials=Depends(security)):
+    with open("users.json", encoding="utf-8") as fp:
+        users = json.load(fp)
+
+    users = {user["username"]: hashlib.md5(
+        user["password"].encode()).hexdigest() for user in users}
+
     try:
         assert credentials.scheme == "Bearer"
-        username, pwmd5 = credentials.credentials.split(":")
-        assert pwmd5 == users[username]
+        username, pwmd5, ver = credentials.credentials.split(":")
+        # assert ver in ACCEPTABLE_VERSIONS and pwmd5 == users[username]
+        if not ver in ACCEPTABLE_VERSIONS:
+            raise Exception("please upgrade")
 
-    except:
-        raise HTTPException(status_code=401)
+        if not username in users or not pwmd5 == users[username]:
+            raise Exception("auth failed")
+
+    except Exception as e:
+        detail = e.args[0] if len(e.args) else "auth invalid"
+        raise HTTPException(status_code=401, detail=detail)
 
     return {"username": username}
 
 
 @app.get("/session")
 async def GetSessionToken(user=Depends(auth)):
+    with open("session_token.txt", encoding="utf-8") as fp:
+        session_token = fp.read().strip()
+
     return {"session_token": session_token}
 
 
@@ -84,4 +89,4 @@ async def PostConversation(item: ConversationItem, user=Depends(auth)):
 
 if __name__ == "__main__":
     import uvicorn as uvicorn
-    uvicorn.run(app=app, host=HOST, port=PORT)
+    uvicorn.run(app=app, host="127.0.0.1", port=PORT)
